@@ -1,0 +1,8 @@
+novel:
+  rootDir: ./novels  # 小说存放目录
+  delTempDir: true    # 是否删除临时文件夹
+  termBarWidth: 50    # 下载进度条宽度
+filter:
+  keywords:
+    - 换源App
+    - huanyuanapp.org
