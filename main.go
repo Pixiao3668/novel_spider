@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/schollz/progressbar/v3"
@@ -22,8 +23,6 @@ var config Config
 var keywords []string
 
 func init()  {
-	// 创建一个 HTTP 客户端
-	client = &http.Client{}
 	wg = sync.WaitGroup{}
 	// 创建一个配置对象
 	config = Config{
@@ -33,6 +32,10 @@ func init()  {
 	}
 	// 配置初始化
 	initConfig()
+	// 创建一个 HTTP 客户端
+	client = &http.Client{
+		Timeout: time.Duration(config.timeout) * time.Second,
+	}
 }
 
 // 创建一个章节结构体
@@ -47,6 +50,7 @@ type Config struct {
 	rootDir string
 	delTempDir bool
 	termBarWidth int
+	timeout int
 }
 
 func main() {
@@ -114,10 +118,10 @@ func getChapterList(baseUrl string) {
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowBytes(false),
 		progressbar.OptionSetWidth(config.termBarWidth),
-		progressbar.OptionSetDescription("【" + novelName + "】" + "章节下载中 ..."),
+		progressbar.OptionSetDescription("【[red]" + novelName + "[reset]】" + "章节下载中 ..."),
 		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "[green]🌟[reset]",
-			SaucerHead:    "[green]>[reset]",
+			Saucer:        "[green]=[reset]",
+			SaucerHead:    "🐌",
 			SaucerPadding: " ",
 			BarStart:      "[",
 			BarEnd:        "]",
@@ -139,7 +143,7 @@ func getChapterList(baseUrl string) {
 	}
 	wg.Wait()
 	// 将临时文件夹中的文件合成一个txt文件
-	mergeNovel(&chapters, novelPath, novelName)
+	mergeNovel(&chapters, novelName)
 
 	// 删除临时文件夹
 	checkNovelTemp(novelPath)
@@ -155,6 +159,7 @@ func getChapterContent(chap Chapter, dir string, countCh chan string)  {
 	}
 	// User-Agent 设置成苹果浏览器
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)")
+
 
 	// 发起请求
 	res, err := client.Do(req)
@@ -214,9 +219,17 @@ func initConfig()  {
 }
 
 // 合并小说
-func mergeNovel(chapters *[]Chapter, novelPath string, novelName string)  {
+func mergeNovel(chapters *[]Chapter, novelName string)  {
+	novelPath := path.Join(config.rootDir, novelName + ".txt")
+	// 判断文件是否存在，存在就删除
+	if _, err := os.Stat(novelPath); err == nil {
+		err := os.Remove(novelPath)
+		if err != nil {
+			panic(fmt.Errorf("删除文件失败: %w", err))
+		}
+	}
 	// 创建一个文件
-	file, err := os.OpenFile(path.Join(config.rootDir, novelName + ".txt"), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0777)
+	file, err := os.OpenFile(novelPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0777)
 	if err != nil {
 		fmt.Printf("【%s】创建失败：%s\n", novelName + ".txt",err);
 		return
@@ -224,7 +237,7 @@ func mergeNovel(chapters *[]Chapter, novelPath string, novelName string)  {
 	defer file.Close()
 	for _, chap := range *chapters {
 		// 打开章节文件
-		chapFile, err := os.OpenFile(chap.Path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0777)
+		chapFile, err := os.OpenFile(chap.Path, os.O_RDWR, 0777)
 		if err != nil {
 			fmt.Printf("【%s】打开失败：%s\n", chap.Path,err);
 			return
