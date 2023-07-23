@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"path"
+	ini "spider/init"
+	"spider/internal/model"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,44 +15,21 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/schollz/progressbar/v3"
-	"github.com/spf13/viper"
 )
 
 var client *http.Client
 var wg sync.WaitGroup
 var url = flag.String("url", "", "小说目录页地址")
-var config Config
-var keywords []string
+var config *model.Config
 
 func init()  {
 	wg = sync.WaitGroup{}
-	// 创建一个配置对象
-	config = Config{
-		rootDir: "./novels",
-		delTempDir: true,
-		termBarWidth: 50,
-	}
 	// 配置初始化
-	initConfig()
+	config = ini.InitConfig()
 	// 创建一个 HTTP 客户端
 	client = &http.Client{
-		Timeout: time.Duration(config.timeout) * time.Second,
+		Timeout: time.Duration(config.Timeout) * time.Second,
 	}
-}
-
-// 创建一个章节结构体
-type Chapter struct {
-	Index int
-	Title string
-	Href string
-	Path string
-}
-
-type Config struct {
-	rootDir string
-	delTempDir bool
-	termBarWidth int
-	timeout int
 }
 
 func main() {
@@ -88,10 +67,10 @@ func getChapterList(baseUrl string) {
 		return
 	}
 	// 创建一个章节切片
-	chapters := make([]Chapter, 0)
+	chapters := make([]model.Chapter, 0)
 	novelName := doc.Find("#info > h1").Text()
 	// 创建以小说名字为名的文件
-	novelPath := path.Join(config.rootDir, novelName)
+	novelPath := path.Join(config.RootDir, novelName)
 	err = os.MkdirAll(novelPath, 0777)
 	if err != nil {
 		fmt.Printf("创建文件夹出错：%s\n",err);
@@ -102,13 +81,12 @@ func getChapterList(baseUrl string) {
 		title := s.Find("a").Text()
 		href, _ := s.Find("a").Attr("href")
 		// 将章节信息添加到切片中
-		chapters = append(chapters, Chapter{
+		chapters = append(chapters, model.Chapter{
 			Index: i+1,
 			Title: title,
 			Href: baseUrl + href,
 			Path: path.Join(novelPath, strconv.Itoa(i+1) + ".txt"),
 		})
-		// fmt.Printf("第 %d 章节的标题：%s，链接：%s\n", i+1, title, baseUrl + href)
 	})
 
 	wg.Add(len(chapters))
@@ -117,7 +95,7 @@ func getChapterList(baseUrl string) {
 	bar := progressbar.NewOptions(len(chapters),
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowBytes(false),
-		progressbar.OptionSetWidth(config.termBarWidth),
+		progressbar.OptionSetWidth(config.TermBarWidth),
 		progressbar.OptionSetDescription("【[red]" + novelName + "[reset]】" + "章节下载中 ..."),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "[green]=[reset]",
@@ -150,7 +128,7 @@ func getChapterList(baseUrl string) {
 }
 
 // 获取每个章节的内容
-func getChapterContent(chap Chapter, dir string, countCh chan string)  {
+func getChapterContent(chap model.Chapter, dir string, countCh chan string)  {
 	// 创建一个 HTTP 请求
 	req, err := http.NewRequest("GET", chap.Href, nil)
 	if err != nil {
@@ -158,7 +136,7 @@ func getChapterContent(chap Chapter, dir string, countCh chan string)  {
 		return
 	}
 	// User-Agent 设置成苹果浏览器
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)")
+	req.Header.Set("User-Agent", "Opera/9.25 (Windows NT 5.1; U; en)")
 
 
 	// 发起请求
@@ -201,26 +179,9 @@ func getChapterContent(chap Chapter, dir string, countCh chan string)  {
 	wg.Done()
 }
 
-func initConfig()  {
-	viper.SetConfigName("config") // name of config file (without extension)
-	viper.SetConfigType("yaml") // REQUIRED if the config file does not have the extension in the name
-	viper.AddConfigPath("./configs")   // path to look for the config file in
-	viper.AddConfigPath(".")               // optionally look for config in the working directory
-	err := viper.ReadInConfig() // Find and read the config file
-	if err != nil { // Handle errors reading the config file
-		panic(fmt.Errorf("配置文件读取失败: %w", err))
-	}
-	// 将配置文件中的配置项映射到结构体中
-	err = viper.UnmarshalKey("novel", &config)
-	if err != nil {
-		panic(fmt.Errorf("配置文件映射失败: %w", err))
-	}
-	keywords = viper.GetStringSlice("filter.keywords")
-}
-
 // 合并小说
-func mergeNovel(chapters *[]Chapter, novelName string)  {
-	novelPath := path.Join(config.rootDir, novelName + ".txt")
+func mergeNovel(chapters *[]model.Chapter, novelName string)  {
+	novelPath := path.Join(config.RootDir, novelName + ".txt")
 	// 判断文件是否存在，存在就删除
 	if _, err := os.Stat(novelPath); err == nil {
 		err := os.Remove(novelPath)
@@ -254,7 +215,7 @@ func mergeNovel(chapters *[]Chapter, novelName string)  {
 
 // 检查小说临时文件夹
 func checkNovelTemp(novelPath string) {
-	if(config.delTempDir) {
+	if(config.DelTempDir) {
 		err := os.RemoveAll(novelPath)
 		if err != nil {
 			panic(fmt.Errorf("删除临时文件夹失败: %w", err))
@@ -263,7 +224,7 @@ func checkNovelTemp(novelPath string) {
 }
 
 func containsKeyword(str string) bool {
-	for _, keyword := range keywords {
+	for _, keyword := range config.KeyWords {
 		if strings.Contains(str, keyword) {
 			return true
 		}
