@@ -51,7 +51,8 @@ func getChapterList(baseUrl string) {
 		return
 	}
 	// User-Agent 设置成苹果浏览器
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36")
 
 	// 发起请求
 	res, err := client.Do(req)
@@ -136,7 +137,7 @@ func getChapterContent(chap model.Chapter, dir string, countCh chan string)  {
 		return
 	}
 	// User-Agent 设置成苹果浏览器
-	req.Header.Set("User-Agent", "Opera/9.25 (Windows NT 5.1; U; en)")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36")
 
 
 	// 发起请求
