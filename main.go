@@ -60,6 +60,10 @@ func getChapterList(baseUrl string) {
 		fmt.Printf("请求出错：%s\n",err);
 		return
 	}
+	if res.StatusCode != 200 { 
+		fmt.Printf("请求出错：%s\n",res.Status);
+		return
+	}
 	defer res.Body.Close();
 
 	doc, err := goquery.NewDocumentFromReader(res.Body)
@@ -69,7 +73,17 @@ func getChapterList(baseUrl string) {
 	}
 	// 创建一个章节切片
 	chapters := make([]model.Chapter, 0)
+	// 获取小说名字
 	novelName := doc.Find("#info > h1").Text()
+	// 获取小说状态
+	novelStatus := doc.Find("#info > p:nth-child(3)").Text()
+	if strings.Contains(novelStatus, "连载中") {
+		novelStatus = "连载中"
+	} else if strings.Contains(novelStatus, "完结") {
+		novelStatus = "已完结"
+	} else {
+		novelStatus = "未知"
+	}
 	// 创建以小说名字为名的文件
 	novelPath := path.Join(config.RootDir, novelName)
 	err = os.MkdirAll(novelPath, 0777)
@@ -97,7 +111,7 @@ func getChapterList(baseUrl string) {
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowBytes(false),
 		progressbar.OptionSetWidth(config.TermBarWidth),
-		progressbar.OptionSetDescription("【[red]" + novelName + "[reset]】" + "章节下载中 ..."),
+		progressbar.OptionSetDescription("【[red]" + novelName + "[reset]】"+ "【[blue]状态：" + novelStatus + "[reset]】"+"共[yellow]"+ strconv.Itoa(len(chapters))  + "[reset]章节  ⏳下载中 🚦"),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "[green]=[reset]",
 			SaucerHead:    "🐌",
@@ -143,13 +157,17 @@ func getChapterContent(chap model.Chapter, dir string, countCh chan string)  {
 	// 发起请求
 	res, err := client.Do(req)
 	if err != nil {
+		countCh <- chap.Title
+		wg.Done()
 		fmt.Printf("请求出错：%s\n",err);
 		return
 	}
 	defer res.Body.Close();
 
 	if res.StatusCode != 200 {
-		fmt.Printf("请求出错：%s\n",err);
+		countCh <- chap.Title
+		wg.Done()
+		fmt.Printf("%s地址请求异常：%s\n",chap.Href,err);
 		return
 	}
 	doc, err := goquery.NewDocumentFromReader(res.Body)
